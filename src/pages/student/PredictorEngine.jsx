@@ -119,15 +119,38 @@ function MainPredictorWorkspace() {
       { id: 'sc_1', name: 'Caste Certificate', desc: 'Issued by Competent Sub-Divisional Officer/Magistrate.' },
       { id: 'sc_2', name: 'Caste/Tribe Validity Certificate', desc: 'Mandatory document for locking institutional seat category reservation.' }
     ],
-    TFWS: [{ id: 'tfws_1', name: 'Income Certificate (Family < 8 Lakhs)', desc: 'Issued by Tahsildar explicitly mentioning financial year metrics.' }]
+    TFWS: [{ id: 'tfws_1', name: 'Income Certificate (Family < 8 Lakhs)', desc: 'Issued by Tahsildar explicitly mentioning financial year metrics.' }],
+    PWD: [{ id: 'pwd_1', name: 'Disability Certificate (Proforma-F/F-1)', desc: 'Issued by Authorized Medical Board/Civil Surgeon with minimum 40% disability assessment.' }],
+    DEFENCE: [{ id: 'def_1', name: 'Defence Service Certificate (Proforma-C/D/E)', desc: 'Ex-Servicemen Certificate/Active Service Certificate issued by Zilla Sainik Welfare Office.' }]
   };
 
   const getRequiredDocuments = () => {
     let list = [...(documentDatabase.COMMON || [])];
-    if (docCategory === 'OBC' || docCategory === 'GOBCS') list = [...list, ...(documentDatabase.OBC || [])];
-    if (docCategory === 'EWS') list = [...list, ...(documentDatabase.EWS || [])];
-    if (docCategory === 'SC' || docCategory === 'ST') list = [...list, ...(documentDatabase.SC_ST || [])];
-    if (docCategory === 'TFWS') list = [...list, ...(documentDatabase.TFWS || [])];
+    const cleanDocCat = String(docCategory || '').toUpperCase();
+    // 1. OBC Dynamic Keywords Search (Matches OBC, GOBCS, LOBCS, PWDOBC etc.)
+    if (cleanDocCat.includes('OBC') || cleanDocCat.includes('BC')) {
+      list = [...list, ...(documentDatabase.OBC || [])];
+    }  
+    // 2. EWS Verification Tracking
+    if (cleanDocCat.includes('EWS')) {
+      list = [...list, ...(documentDatabase.EWS || [])];
+    }   
+    // 3. SC/ST Category Core Records (Matches SC, ST, GSCS, LSCS, GSTS, LSTS)
+    if (cleanDocCat.includes('SC') || cleanDocCat.includes('ST')) {
+      list = [...list, ...(documentDatabase.SC_ST || [])];
+    }
+    // 4. TFWS Fee Waiver Allocation
+    if (cleanDocCat.includes('TFWS')) {
+      list = [...list, ...(documentDatabase.TFWS || [])];
+    }
+    // 5. PWD Disability Documentation
+    if (cleanDocCat.includes('PWD')) {
+      list = [...list, ...(documentDatabase.PWD || [])];
+    }
+    // 6. DEFENCE Service Certificates
+    if (cleanDocCat.includes('DEFENCE')) {
+      list = [...list, ...(documentDatabase.DEFENCE || [])];
+    }
     return list;
   };
 
