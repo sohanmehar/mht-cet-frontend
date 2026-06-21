@@ -580,8 +580,20 @@ function MainPredictorWorkspace() {
               <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 backdrop-blur-sm">
                 <div className="space-y-1"><div className="flex items-center gap-2 text-indigo-400"><FileCheck className="h-5 w-5" /><h2 className="font-bold text-lg text-white">Select Admission Entry Quota</h2></div></div>
                 <div>
-                  <select value={docCategory} onChange={(e) => setDocCategory(e.target.value)} className="rounded-xl bg-slate-950 border border-slate-700 p-3 text-sm text-white font-bold focus:ring-2 focus:ring-indigo-500 cursor-pointer w-full sm:w-48">
-                    <option value="OPEN">General / OPEN</option><option value="OBC">OBC Category</option><option value="EWS">EWS Quota</option><option value="SC">SC / ST Category</option><option value="TFWS">TFWS Scheme</option>
+                  {/* 🎯 DYNAMIC RE-MAPPED DOCUMENTS DROPDOWN */}
+                  <select 
+                    value={docCategory} 
+                    onChange={(e) => setDocCategory(e.target.value)} 
+                    className="rounded-xl bg-slate-950 border border-slate-700 p-3 text-sm text-white font-bold focus:ring-2 focus:ring-indigo-500 cursor-pointer w-full sm:w-48"
+                  >
+                    {/* Fallback default open selection */}
+                    {categories.length === 0 && <option value="OPEN">General / OPEN</option>}
+                    {/* Database dynamically mapped categories populate here directly */}
+                    {categories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
