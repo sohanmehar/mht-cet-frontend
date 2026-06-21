@@ -422,8 +422,24 @@ function MainPredictorWorkspace() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {displayList.map((item, index) => {
-                      const sortedRounds = [...item.rounds].sort((a, b) => a.round - b.round);
-                      const graphData = sortedRounds.map(r => ({ round: `R${r.round}`, cutoff: parseFloat(r.percentile.toFixed(4)) }));
+                      // 🎯 UNIVERSAL UNIQUE ROUNDS MAPPER (Works for all 50+ categories)
+                      const uniqueRoundsMap = {};
+                      // Item.rounds ke saare records ko scan karo
+                      (item.rounds || []).forEach(r => {
+                        const roundNum = String(r.round);
+                        const currentPercentile = parseFloat(r.percentile || 0);
+                        // Agar is round ka data pehle nahi mila, ya mila hai par naya percentile bada (stricter) hai, toh update karo
+                        if (!uniqueRoundsMap[roundNum] || currentPercentile > uniqueRoundsMap[roundNum]) {
+                          uniqueRoundsMap[roundNum] = currentPercentile;
+                        }
+                      });
+                      // X-Axis par strictly chronological sequence lane ke liye keys ko sort karo (1, 2, 3, 4)
+                      const graphData = Object.keys(uniqueRoundsMap)
+                        .sort((a, b) => Number(a) - Number(b))
+                        .map(roundNum => ({
+                          round: `R${roundNum}`,
+                          cutoff: uniqueRoundsMap[roundNum]
+                        }));
                       return (
                         <div key={index} className="bg-slate-900/30 border border-slate-800 rounded-xl p-5 flex flex-col justify-between gap-4 transition-all relative">
                           <div className="space-y-2">
@@ -434,10 +450,24 @@ function MainPredictorWorkspace() {
                             <h4 className="font-bold text-sm sm:text-base text-white line-clamp-2 leading-snug">{item.collegeName}</h4>
                           </div>
 
-                          <div className="bg-slate-950/60 rounded-lg p-2.5 border border-slate-800 grid grid-cols-3 gap-1 text-center font-mono text-[11px]">
-                            <div className="border-r border-slate-800/80"><div className="text-[9px] text-slate-500 font-bold">Round 1</div><div className="text-slate-300 font-bold mt-0.5">{getRoundCutoff(item.rounds, 1)}</div></div>
-                            <div className="border-r border-slate-800/80"><div className="text-[9px] text-slate-500 font-bold">Round 2</div><div className="text-slate-300 font-bold mt-0.5">{getRoundCutoff(item.rounds, 2)}</div></div>
-                            <div><div className="text-[9px] text-slate-400 font-bold">Round 3</div><div className="text-indigo-400 font-bold mt-0.5">{getRoundCutoff(item.rounds, 3)}</div></div>
+                          {/* 🎯 UPDATED TO 4 COLUMNS TO ACCOMMODATE ROUND 4 */}
+                          <div className="bg-slate-950/60 rounded-lg p-2.5 border border-slate-800 grid grid-cols-4 gap-1 text-center font-mono text-[11px]">
+                            <div className="border-r border-slate-800/80">
+                              <div className="text-[9px] text-slate-500 font-bold">Round 1</div>
+                              <div className="text-slate-300 font-bold mt-0.5">{getRoundCutoff(item.rounds, 1)}</div>
+                            </div>
+                            <div className="border-r border-slate-800/80">
+                              <div className="text-[9px] text-slate-500 font-bold">Round 2</div>
+                              <div className="text-slate-300 font-bold mt-0.5">{getRoundCutoff(item.rounds, 2)}</div>
+                            </div>
+                            <div className="border-r border-slate-800/80">
+                              <div className="text-[9px] text-slate-500 font-bold">Round 3</div>
+                              <div className="text-slate-300 font-bold mt-0.5">{getRoundCutoff(item.rounds, 3)}</div>
+                            </div>
+                            <div>
+                              <div className="text-[9px] text-indigo-400 font-bold">Round 4</div>
+                              <div className="text-indigo-400 font-bold mt-0.5">{getRoundCutoff(item.rounds, 4)}</div>
+                            </div>
                           </div>
 
                           <div className="grid grid-cols-2 gap-2 text-xs text-slate-400 font-medium">
@@ -461,7 +491,7 @@ function MainPredictorWorkspace() {
                                   <LineChart data={graphData}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                                     <XAxis dataKey="round" stroke="#64748b" />
-                                    <YAxis type="number" domain={['dataMin - 0.2', 'dataMax + 0.2']} stroke="#64748b" width={40} />
+                                    <YAxis type="number" domain={['dataMin - 0.5', 'dataMax + 0.5']} stroke="#64748b" width={45} tickFormatter={(value) => { if (typeof value === 'number') { return value.toFixed(2); } return value; }} />
                                     <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155' }} />
                                     <Line type="monotone" dataKey="cutoff" stroke="#6366f1" strokeWidth={2} name="Cutoff" />
                                   </LineChart>
