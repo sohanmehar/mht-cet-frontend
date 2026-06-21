@@ -65,40 +65,7 @@ function MainPredictorWorkspace() {
   const [docCategory, setDocCategory] = useState('OPEN');
   const [checkedDocs, setCheckedDocs] = useState(() => JSON.parse(localStorage.getItem('cet_checked_docs') || '{}'));
   const [preferenceList, setPreferenceList] = useState(() => JSON.parse(localStorage.getItem('cet_pref_list') || '[]'));
-  const [categories, setCategories] = useState([]); // Dynamic category array state
-
-  useEffect(() => {
-      const syncDatabaseDropdowns = async () => {
-        setDirLoading(true);
-        setError('');
-        try {
-          const [distRes, branchRes, dirRes, catRes] = await Promise.all([
-            axios.get('http://localhost:5000/api/districts'),
-            axios.get('http://localhost:5000/api/branches'),
-            axios.get('http://localhost:5000/api/colleges-directory'),
-            axios.get('http://localhost:5000/api/categories') // ⚡ New dynamic fetch hit
-          ]);
-
-          if (distRes.data?.success) setDistricts(distRes.data.data);
-          if (branchRes.data?.success) setBranchesList(branchRes.data.data);
-          if (catRes.data?.success) {
-              setCategories(catRes.data.data);
-              // Default select first available option if query category is out of context bounds
-              if (!query.category && catRes.data.data.length > 0) {
-                  setQuery(prev => ({ ...prev, category: catRes.data.data[0] }));
-              }
-          }
-          if (dirRes.data?.success) {
-            setAllColleges(dirRes.data.data);
-            setFilteredColleges(dirRes.data.data);
-          }
-        } catch (err) {
-          console.error("Sync error:", err);
-          setError('Network synchronization connection drop detected.');
-        } finally { setDirLoading(false); }
-      };
-      syncDatabaseDropdowns();
-  }, [activeWindow]);
+  const [categories, setCategories] = useState([]);
 
   const documentDatabase = {
     COMMON: [
@@ -127,65 +94,47 @@ function MainPredictorWorkspace() {
   const getRequiredDocuments = () => {
     let list = [...(documentDatabase.COMMON || [])];
     const cleanDocCat = String(docCategory || '').toUpperCase();
-    // 1. OBC Dynamic Keywords Search (Matches OBC, GOBCS, LOBCS, PWDOBC etc.)
-    if (cleanDocCat.includes('OBC') || cleanDocCat.includes('BC')) {
-      list = [...list, ...(documentDatabase.OBC || [])];
-    }  
-    // 2. EWS Verification Tracking
-    if (cleanDocCat.includes('EWS')) {
-      list = [...list, ...(documentDatabase.EWS || [])];
-    }   
-    // 3. SC/ST Category Core Records (Matches SC, ST, GSCS, LSCS, GSTS, LSTS)
-    if (cleanDocCat.includes('SC') || cleanDocCat.includes('ST')) {
-      list = [...list, ...(documentDatabase.SC_ST || [])];
-    }
-    // 4. TFWS Fee Waiver Allocation
-    if (cleanDocCat.includes('TFWS')) {
-      list = [...list, ...(documentDatabase.TFWS || [])];
-    }
-    // 5. PWD Disability Documentation
-    if (cleanDocCat.includes('PWD')) {
-      list = [...list, ...(documentDatabase.PWD || [])];
-    }
-    // 6. DEFENCE Service Certificates
-    if (cleanDocCat.includes('DEFENCE')) {
-      list = [...list, ...(documentDatabase.DEFENCE || [])];
-    }
+    if (cleanDocCat.includes('OBC') || cleanDocCat.includes('BC')) { list = [...list, ...(documentDatabase.OBC || [])]; }  
+    if (cleanDocCat.includes('EWS')) { list = [...list, ...(documentDatabase.EWS || [])]; }   
+    if (cleanDocCat.includes('SC') || cleanDocCat.includes('ST')) { list = [...list, ...(documentDatabase.SC_ST || [])]; }
+    if (cleanDocCat.includes('TFWS')) { list = [...list, ...(documentDatabase.TFWS || [])]; }
+    if (cleanDocCat.includes('PWD')) { list = [...list, ...(documentDatabase.PWD || [])]; }
+    if (cleanDocCat.includes('DEF')) { list = [...list, ...(documentDatabase.DEFENCE || [])]; }
     return list;
   };
 
   useEffect(() => { localStorage.setItem('cet_active_window', activeWindow); }, [activeWindow]);
 
-  // 🚨 SYNC COUPLING ONTAB REFRESH SYSTEM
   useEffect(() => {
-    const syncDatabaseDropdowns = async () => {
-      setDirLoading(true);
-      setError('');
-      try {
-        const [distRes, branchRes, dirRes] = await Promise.all([
-          axios.get('http://localhost:5000/api/districts'),
-          axios.get('http://localhost:5000/api/branches'),
-          axios.get('http://localhost:5000/api/colleges-directory')
-        ]);
-
-        if (distRes.data?.success) setDistricts(distRes.data.data);
-        if (branchRes.data?.success) setBranchesList(branchRes.data.data);
-        if (dirRes.data?.success) {
-          setAllColleges(dirRes.data.data);
-          setFilteredColleges(dirRes.data.data);
-        }
-      } catch (err) {
-        console.error("Direct cluster endpoint dropped connections, pulling structural endpoints...");
+      const syncDatabaseDropdowns = async () => {
+        setDirLoading(true);
+        setError('');
         try {
-          const fallbackDir = await axios.get('http://localhost:5000/api/colleges-directory');
-          if (fallbackDir.data?.success) {
-            setAllColleges(fallbackDir.data.data);
-            setFilteredColleges(fallbackDir.data.data);
+          const [distRes, branchRes, dirRes, catRes] = await Promise.all([
+            axios.get('http://localhost:5000/api/districts'),
+            axios.get('http://localhost:5000/api/branches'),
+            axios.get('http://localhost:5000/api/colleges-directory'),
+            axios.get('http://localhost:5000/api/categories')
+          ]);
+
+          if (distRes.data?.success) setDistricts(distRes.data.data);
+          if (branchRes.data?.success) setBranchesList(branchRes.data.data);
+          if (catRes.data?.success) {
+              setCategories(catRes.data.data);
+              if (!query.category && catRes.data.data.length > 0) {
+                  setQuery(prev => ({ ...prev, category: catRes.data.data[0] }));
+              }
           }
-        } catch (e) { setError('Network synchronization connection drop detected.'); }
-      } finally { setDirLoading(false); }
-    };
-    syncDatabaseDropdowns();
+          if (dirRes.data?.success) {
+            setAllColleges(dirRes.data.data);
+            setFilteredColleges(dirRes.data.data);
+          }
+        } catch (err) {
+          console.error("Sync error:", err);
+          setError('Network synchronization connection drop detected.');
+        } finally { setDirLoading(false); }
+      };
+      syncDatabaseDropdowns();
   }, [activeWindow]);
 
   const handleDirectorySearchChange = (e) => {
@@ -248,28 +197,22 @@ function MainPredictorWorkspace() {
   const toggleTrendGraph = (id) => { setExpandedTrendId(expandedTrendId === id ? null : id); };
   const toggleDocumentCheck = (docId) => { setCheckedDocs(prev => ({ ...prev, [docId]: !prev[docId] })); };
 
-  // 🚨 Frontend Simulator Trigger Function inside MainPredictorWorkspace component
   const triggerMockSimulation = async () => {
     if (!query.percentile) {
       alert("Please input your percentile in parameters first to run simulator!");
       return;
     }
-      setSimLoading(true);
-      try {
-        const response = await axios.post('http://localhost:5000/api/predict/simulate-mock', {
-          percentile: query.percentile,
-          category: query.category,
-           preferences: preferenceList
-        });
-        if (response.data?.success) {
-          setSimResult(response.data.data);
-          // Open modal or alert to show allotment results
-        }
-      } catch (err) {
-        console.error("Simulation frontend handler failed:", err);
-      } finally {
-        setSimLoading(false);
-      }
+    setSimLoading(true);
+    try {
+      const response = await axios.post('http://localhost:5000/api/predict/simulate-mock', {
+        percentile: query.percentile,
+        category: query.category,
+        preferences: preferenceList
+      });
+      if (response.data?.success) { setSimResult(response.data.data); }
+    } catch (err) {
+      console.error("Simulation frontend handler failed:", err);
+    } finally { setSimLoading(false); }
   };
 
   const exportPreferenceListToPDF = () => {
@@ -283,26 +226,11 @@ function MainPredictorWorkspace() {
   const getChanceBadge = (type) => {
     switch (type) {
       case 'SAFE':
-        return (
-          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2.5 py-1 text-xs font-bold text-emerald-400 border border-emerald-500/20">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            SAFE
-          </span>
-        );
+        return ( <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2.5 py-1 text-xs font-bold text-emerald-400 border border-emerald-500/20"><CheckCircle2 className="h-3.5 w-3.5" />SAFE</span> );
       case 'MATCH':
-        return (
-          <span className="inline-flex items-center gap-1 rounded-md bg-indigo-500/10 px-2.5 py-1 text-xs font-bold text-indigo-400 border border-indigo-500/20">
-            <HelpCircle className="h-3.5 w-3.5" />
-            MATCH
-          </span>
-        );
+        return ( <span className="inline-flex items-center gap-1 rounded-md bg-indigo-500/10 px-2.5 py-1 text-xs font-bold text-indigo-400 border border-indigo-500/20"><HelpCircle className="h-3.5 w-3.5" />MATCH</span> );
       default:
-        return (
-          <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-400 border border-amber-500/20">
-            <AlertTriangle className="h-3.5 w-3.5" />
-            REACH
-          </span>
-        );
+        return ( <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-400 border border-amber-500/20"><AlertTriangle className="h-3.5 w-3.5" />REACH</span> );
     }
   };
 
@@ -316,16 +244,34 @@ function MainPredictorWorkspace() {
   const checkedCount = currentDocsList.filter(d => d && checkedDocs[d?.id]).length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex font-sans">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex font-sans overflow-hidden">
+      
+      {/* 📱 MOBILE NAVIGATION SLIDEOVER PANEL OVERLAY */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm lg:hidden" onClick={() => setIsMobileMenuOpen(false)} />
+      )}
+
+      {/* SIDEBAR CONTAINER - MOBILE AND DESKTOP COMPATIBLE */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 transition-transform duration-300 transform lg:translate-x-0 lg:static lg:h-screen ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="h-full flex flex-col justify-between p-4">
           <div className="space-y-6">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-2.5 text-indigo-400"><GraduationCap className="h-7 w-7" /><span className="font-extrabold text-lg bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent tracking-tight">MHT-CET Suite</span></div>
-              <button onClick={() => setIsMobileMenuOpen(false)} className="lg:hidden text-slate-400 cursor-pointer"><X className="h-5 w-5" /></button>
+              <button onClick={() => setIsMobileMenuOpen(false)} className="lg:hidden text-slate-400 p-1 rounded-md hover:bg-slate-800 cursor-pointer"><X className="h-5 w-5" /></button>
             </div>
             <nav className="space-y-1.5">
               <button onClick={() => { setActiveWindow('predictor'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${activeWindow === 'predictor' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}><LayoutDashboard className="h-4 w-4" /> Core Predictor Engine</button>
+              
+              <button onClick={() => { setActiveWindow('simulator'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${activeWindow === 'simulator' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}>
+                <div className="flex items-center gap-3">
+                  <ListOrdered className="h-4 w-4" /> 
+                  <span>CAP Choice Simulator</span>
+                </div>
+                {preferenceList.length > 0 && (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeWindow === 'simulator' ? 'bg-white text-indigo-600' : 'bg-indigo-500/20 text-indigo-400'}`}>{preferenceList.length}</span>
+                )}
+              </button>
+
               <button onClick={() => { setActiveWindow('directory'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${activeWindow === 'directory' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}><BookOpen className="h-4 w-4" /> College & Branch List</button>
               <button onClick={() => { setActiveWindow('documents'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${activeWindow === 'documents' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}><FileCheck className="h-4 w-4" /> CAP Document Tracker</button>
             </nav>
@@ -334,28 +280,32 @@ function MainPredictorWorkspace() {
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0 max-h-screen overflow-y-auto">
-        <header className="border-b border-slate-800 bg-slate-900/40 backdrop-blur-md px-4 sm:px-6 py-4 sticky top-0 z-30 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden text-slate-300 p-1 rounded-md hover:bg-slate-800 cursor-pointer"><Menu className="h-6 w-6" /></button>
-            <h1 className="font-extrabold text-md sm:text-xl text-white uppercase tracking-wider">
-              {activeWindow === 'predictor' ? "Choice Matrix Workplace" : activeWindow === 'directory' ? "DTE Institute Directory" : "DTE Scrutiny Checklist Center"}
+      {/* MAIN LAYOUT WRAPPER LAYER */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
+        <header className="border-b border-slate-800 bg-slate-950/60 backdrop-blur-md px-4 sm:px-6 py-4 sticky top-0 z-30 flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden text-slate-300 p-1.5 rounded-xl bg-slate-900 border border-slate-800/80 hover:bg-slate-800 cursor-pointer shrink-0"><Menu className="h-5 w-5" /></button>
+            <h1 className="font-extrabold text-sm sm:text-lg text-white uppercase tracking-wider truncate">
+              {activeWindow === 'predictor' ? "Choice Matrix Workplace" : activeWindow === 'simulator' ? "CAP Preference Choice Simulator" : activeWindow === 'directory' ? "DTE Institute Directory" : "DTE Scrutiny Checklist Center"}
             </h1>
           </div>
-          <span className="text-[11px] font-mono bg-slate-900 text-slate-400 border border-slate-800 px-3 py-1.5 rounded-full">CAP Session Live</span>
+          <span className="text-[10px] sm:text-[11px] font-mono bg-slate-900 text-slate-400 border border-slate-800 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full shrink-0">CAP Live</span>
         </header>
 
         <main className="p-4 sm:p-6 lg:p-8 flex-1">
           {error && <div className="mb-4 p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 font-mono text-xs text-center">{error}</div>}
 
-          {activeWindow === 'predictor' ? (
-            <div className="space-y-8">
+          {/* 💎 WINDOW ONE: CORE PREDICTOR INTERFACE */}
+          {activeWindow === 'predictor' && (
+            <div className="space-y-6 sm:space-y-8 animate-fadeIn">
               <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-4 sm:p-6 backdrop-blur-sm shadow-xl">
                 <div className="flex items-center gap-2 text-indigo-400 mb-4"><Sliders className="h-5 w-5" /><h2 className="font-bold text-base sm:text-lg text-white">Configure Search Parameters</h2></div>
+                
+                {/* 📱 RESPONSIVE CONFIG PARAMETERS BOX STRIPS FOR PHONE FIELDS */}
                 <form onSubmit={executePrediction} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">My Percentile</label>
-                    <input name="percentile" type="number" step="0.0000001" required min="0" max="100" value={query.percentile} onChange={handleInputChange} placeholder="e.g. 95.4837" className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium" />
+                    <input name="percentile" type="number" step="0.0000001" required min="0" max="100" value={query.percentile} onChange={handleInputChange} placeholder="e.g. 95.4837" className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium font-mono" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Seat Category</label>
@@ -405,166 +355,191 @@ function MainPredictorWorkspace() {
                       </div>
                     )}
                   </div>
-                  <button type="submit" className="w-full py-3 px-4 rounded-lg text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-lg cursor-pointer"><Search className="h-4 w-4" /> {loading ? "Calculating..." : "Find Options"}</button>
+                  <button type="submit" className="w-full py-3 px-4 rounded-lg text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-lg cursor-pointer flex items-center justify-center gap-2"><Search className="h-4 w-4" /> {loading ? "Calculating..." : "Find Options"}</button>
                 </form>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-800 pb-3">
-                    <h3 className="font-extrabold text-lg text-white tracking-tight">Predicted Adjustments</h3>
-                    <div className="flex rounded-lg bg-slate-900 border border-slate-800 p-1 text-[11px] overflow-x-auto whitespace-nowrap">
-                      <button onClick={() => setActiveTab('match')} className={`px-2.5 py-1.5 font-bold rounded-md transition-all cursor-pointer ${activeTab === 'match' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400'}`}>Best Matches ({matchColleges.length})</button>
-                      <button onClick={() => setActiveTab('safe')} className={`px-2.5 py-1.5 font-bold rounded-md transition-all cursor-pointer ${activeTab === 'safe' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400'}`}>Safe Options ({safeColleges.length})</button>
-                      <button onClick={() => setActiveTab('dream')} className={`px-2.5 py-1.5 font-bold rounded-md transition-all cursor-pointer ${activeTab === 'dream' ? 'bg-rose-600 text-white shadow' : 'text-slate-400'}`}>Ambitious Choices ({dreamColleges.length})</button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {displayList.map((item, index) => {
-                      // 🎯 UNIVERSAL UNIQUE ROUNDS MAPPER (Works for all 50+ categories)
-                      const uniqueRoundsMap = {};
-                      // Item.rounds ke saare records ko scan karo
-                      (item.rounds || []).forEach(r => {
-                        const roundNum = String(r.round);
-                        const currentPercentile = parseFloat(r.percentile || 0);
-                        // Agar is round ka data pehle nahi mila, ya mila hai par naya percentile bada (stricter) hai, toh update karo
-                        if (!uniqueRoundsMap[roundNum] || currentPercentile > uniqueRoundsMap[roundNum]) {
-                          uniqueRoundsMap[roundNum] = currentPercentile;
-                        }
-                      });
-                      // X-Axis par strictly chronological sequence lane ke liye keys ko sort karo (1, 2, 3, 4)
-                      const graphData = Object.keys(uniqueRoundsMap)
-                        .sort((a, b) => Number(a) - Number(b))
-                        .map(roundNum => ({
-                          round: `R${roundNum}`,
-                          cutoff: uniqueRoundsMap[roundNum]
-                        }));
-                      return (
-                        <div key={index} className="bg-slate-900/30 border border-slate-800 rounded-xl p-5 flex flex-col justify-between gap-4 transition-all relative">
-                          <div className="space-y-2">
-                            <div className="flex items-start justify-between gap-3 flex-wrap">
-                              <span className="text-[10px] font-mono bg-slate-800 text-indigo-400 px-2 py-0.5 rounded border border-slate-700">Code: {item.collegeCode}</span>
-                              {getChanceBadge(item.recommendationType)}
-                            </div>
-                            <h4 className="font-bold text-sm sm:text-base text-white line-clamp-2 leading-snug">{item.collegeName}</h4>
-                          </div>
-
-                          {/* 🎯 UPDATED TO 4 COLUMNS TO ACCOMMODATE ROUND 4 */}
-                          <div className="bg-slate-950/60 rounded-lg p-2.5 border border-slate-800 grid grid-cols-4 gap-1 text-center font-mono text-[11px]">
-                            <div className="border-r border-slate-800/80">
-                              <div className="text-[9px] text-slate-500 font-bold">Round 1</div>
-                              <div className="text-slate-300 font-bold mt-0.5">{getRoundCutoff(item.rounds, 1)}</div>
-                            </div>
-                            <div className="border-r border-slate-800/80">
-                              <div className="text-[9px] text-slate-500 font-bold">Round 2</div>
-                              <div className="text-slate-300 font-bold mt-0.5">{getRoundCutoff(item.rounds, 2)}</div>
-                            </div>
-                            <div className="border-r border-slate-800/80">
-                              <div className="text-[9px] text-slate-500 font-bold">Round 3</div>
-                              <div className="text-slate-300 font-bold mt-0.5">{getRoundCutoff(item.rounds, 3)}</div>
-                            </div>
-                            <div>
-                              <div className="text-[9px] text-indigo-400 font-bold">Round 4</div>
-                              <div className="text-indigo-400 font-bold mt-0.5">{getRoundCutoff(item.rounds, 4)}</div>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2 text-xs text-slate-400 font-medium">
-                            <div className="flex items-center gap-1.5 text-slate-300 col-span-2"><Award className="h-3.5 w-3.5 text-indigo-400 shrink-0" /><span className="line-clamp-1">{item.branchName}</span></div>
-                            <div className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-slate-500 shrink-0" /><span>{item.city}</span></div>
-                            <div className="flex items-center gap-1.5 justify-end"><Building2 className="h-3.5 w-3.5 text-slate-500 shrink-0" /><span className="truncate">{item.status}</span></div>
-                          </div>
-
-                          <div className="flex items-center justify-between pt-1 border-t border-slate-800/40">
-                            <span className="text-[10px] font-mono text-slate-500">Tier: {item.tierLabel || 'Good'}</span>
-                            <div className="flex items-center gap-2">
-                              <button onClick={() => toggleTrendGraph(`${activeTab}-${index}`)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1.5 rounded-lg text-xs flex items-center gap-1 font-bold"><BarChart3 className="h-3.5 w-3.5 text-indigo-400" /> Trend</button>
-                              <button onClick={() => addToPreference(item)} className="bg-indigo-600 hover:bg-indigo-700 text-white p-1.5 rounded-lg transition-all shadow-md"><Plus className="h-4 w-4" /></button>
-                            </div>
-                          </div>
-
-                          {expandedTrendId === `${activeTab}-${index}` && (
-                            <div className="mt-1 p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
-                              <div className="h-32 w-full font-mono text-[10px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                  <LineChart data={graphData}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                                    <XAxis dataKey="round" stroke="#64748b" />
-                                    <YAxis type="number" domain={['dataMin - 0.5', 'dataMax + 0.5']} stroke="#64748b" width={45} tickFormatter={(value) => { if (typeof value === 'number') { return value.toFixed(2); } return value; }} />
-                                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155' }} />
-                                    <Line type="monotone" dataKey="cutoff" stroke="#6366f1" strokeWidth={2} name="Cutoff" />
-                                  </LineChart>
-                                </ResponsiveContainer>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+              <div className="space-y-4">
+                {/* 📱 HORIZONTAL SCROLL CHIPS FOR ACTIVE TABS ON MOBILE VIEW */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-800 pb-3">
+                  <h3 className="font-extrabold text-base sm:text-lg text-white tracking-tight">Predicted Adjustments</h3>
+                  <div className="flex rounded-lg bg-slate-900 border border-slate-800 p-1 text-[11px] overflow-x-auto whitespace-nowrap max-w-full scrollbar-none">
+                    <button onClick={() => setActiveTab('match')} className={`px-2.5 py-1.5 font-bold rounded-md transition-all cursor-pointer ${activeTab === 'match' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400'}`}>Best Matches ({matchColleges.length})</button>
+                    <button onClick={() => setActiveTab('safe')} className={`px-2.5 py-1.5 font-bold rounded-md transition-all cursor-pointer ${activeTab === 'safe' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400'}`}>Safe Bets ({safeColleges.length})</button>
+                    <button onClick={() => setActiveTab('dream')} className={`px-2.5 py-1.5 font-bold rounded-md transition-all cursor-pointer ${activeTab === 'dream' ? 'bg-rose-600 text-white shadow' : 'text-slate-400'}`}>Ambitious ({dreamColleges.length})</button>
                   </div>
                 </div>
 
-                <div className="bg-slate-900/50 border border-slate-800 p-4 sm:p-6 rounded-2xl h-fit space-y-4 shadow-xl">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <div className="flex items-center gap-2 text-emerald-400"><ListOrdered className="h-5 w-5" /><h3 className="font-bold text-white text-sm sm:text-base">My Choices Form</h3></div>
-                    <span className="text-xs bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full font-bold font-mono">{preferenceList.length} Units</span>
-                  </div>
-                  {preferenceList.length === 0 ? (
-                    <div className="text-center py-8 text-slate-500 text-xs font-medium">Select + icon on college cards to build form.</div>
-                  ) : (
-                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-                      {preferenceList.map((item, index) => (
-                        <div key={index} className="flex items-center justify-between p-3 bg-slate-950/80 border border-slate-800 rounded-xl gap-3">
-                          <div className="space-y-0.5 min-w-0 flex-1">
-                            <div className="flex items-center gap-2 text-[10px] font-mono"><span className="text-emerald-400 font-bold">#{index + 1}</span><span className="text-slate-500 truncate">Code: {item.collegeCode}</span></div>
-                            <p className="text-xs font-bold text-white truncate">{item.collegeName}</p>
+                {/* 📱 PERFECT GRID RESPONSIVENESS MATRIX PAR COLLAPSE CHANNELS */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {displayList.map((item, index) => {
+                    const uniqueRoundsMap = {};
+                    (item.rounds || []).forEach(r => {
+                      const roundNum = String(r.round);
+                      const currentPercentile = parseFloat(r.percentile || 0);
+                      if (!uniqueRoundsMap[roundNum] || currentPercentile > uniqueRoundsMap[roundNum]) {
+                        uniqueRoundsMap[roundNum] = currentPercentile;
+                      }
+                    });
+                    const graphData = Object.keys(uniqueRoundsMap)
+                      .sort((a, b) => Number(a) - Number(b))
+                      .map(roundNum => ({
+                        round: `R${roundNum}`,
+                        cutoff: uniqueRoundsMap[roundNum]
+                      }));
+                    return (
+                      <div key={index} className="bg-slate-900/30 border border-slate-800 rounded-xl p-4 sm:p-5 flex flex-col justify-between gap-4 transition-all relative shadow-lg">
+                        <div className="space-y-2">
+                          <div className="flex items-start justify-between gap-2 flex-wrap">
+                            <span className="text-[10px] font-mono bg-slate-800 text-indigo-400 px-2 py-0.5 rounded border border-slate-700">Code: {item.collegeCode}</span>
+                            {getChanceBadge(item.recommendationType)}
                           </div>
-                          <div className="flex items-center gap-1">
-                            <div className="flex flex-col">
-                              <button disabled={index === 0} onClick={() => movePreferenceUp(index)} className="text-slate-500 hover:text-indigo-400 disabled:opacity-10"><ChevronUp className="h-3.5 w-3.5" /></button>
-                              <button disabled={index === preferenceList.length - 1} onClick={() => movePreferenceDown(index)} className="text-slate-500 hover:text-indigo-400 disabled:opacity-10"><ChevronDown className="h-3.5 w-3.5" /></button>
-                            </div>
-                            <button onClick={() => removeFromPreference(item.branchCode)} className="text-slate-500 hover:text-rose-400 p-1 cursor-pointer"><Trash2 className="h-3.5 w-3.5" /></button>
+                          <h4 className="font-bold text-sm sm:text-base text-white line-clamp-2 leading-snug">{item.collegeName}</h4>
+                        </div>
+
+                        {/* 📈 4 COLUMNS CELL SYSTEM FLEXES PROPERLY */}
+                        <div className="bg-slate-950/60 rounded-lg p-2 border border-slate-800 grid grid-cols-4 gap-0.5 text-center font-mono text-[10px] sm:text-[11px]">
+                          <div className="border-r border-slate-800/80">
+                            <div className="text-[9px] text-slate-500 font-bold">R1</div>
+                            <div className="text-slate-300 font-bold mt-0.5 truncate">{getRoundCutoff(item.rounds, 1)}</div>
+                          </div>
+                          <div className="border-r border-slate-800/80">
+                            <div className="text-[9px] text-slate-500 font-bold">R2</div>
+                            <div className="text-slate-300 font-bold mt-0.5 truncate">{getRoundCutoff(item.rounds, 2)}</div>
+                          </div>
+                          <div className="border-r border-slate-800/80">
+                            <div className="text-[9px] text-slate-500 font-bold">R3</div>
+                            <div className="text-slate-300 font-bold mt-0.5 truncate">{getRoundCutoff(item.rounds, 3)}</div>
+                          </div>
+                          <div>
+                            <div className="text-[9px] text-indigo-400 font-bold">R4</div>
+                            <div className="text-indigo-400 font-bold mt-0.5 truncate">{getRoundCutoff(item.rounds, 4)}</div>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                  {preferenceList.length > 0 && (
-                    <div className="space-y-2">
-                        <button onClick={triggerMockSimulation} className="w-full py-3 px-4 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer">{simLoading ? "Simulating Rounds..." : "⚡ RUN VIRTUAL CAP ALLOTMENT"}</button>
-                        <button onClick={exportPreferenceListToPDF} className="w-full py-3 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-lg cursor-pointer flex items-center justify-center gap-2"><Download className="h-4 w-4" /> DOWNLOAD PRINTABLE FORM</button>
-                    </div>
-                  )}
-                  {/* 🚨 SIMULATION RESULT POPUP BANNER */}
-                  {simResult && (
-                      <div className="mt-4 p-5 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 animate-fadeIn space-y-3">
-                      <div className="flex items-center gap-2 text-indigo-400 font-extrabold text-sm uppercase tracking-wider">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-400" /> Virtual CAP Allotment Secured
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-xs text-slate-400 font-medium">Based on your preference form matrix, you have been allocated:</p>
-                        <h4 className="font-black text-white text-base pt-1">Choice #{simResult.preferenceNumber}: {simResult.collegeName}</h4>
-                        <p className="text-sm text-indigo-300 font-bold">{simResult.branchName} ({simResult.city})</p>
-                      </div>
-                      <div className="text-[11px] font-mono text-slate-500 pt-1 border-t border-slate-800/80">
-                        Matched at Round {simResult.round} baseline cutoff: {simResult.cutoffMatched.toFixed(4)}%ile
-                      </div>
-                    </div>
-                  )}
 
-                  {simResult === null && !simLoading && preferenceList.length > 0 && results.length > 0 && (
-                    <div className="mt-4 p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium text-center">
-                      ❌ No Allotment Secured. Try adding "Safe Bet" colleges lower down your list to prevent getting knocked out in CAP Round 1!
-                    </div>
-                  )}
+                        <div className="grid grid-cols-2 gap-2 text-xs text-slate-400 font-medium">
+                          <div className="flex items-center gap-1.5 text-slate-300 col-span-2"><Award className="h-3.5 w-3.5 text-indigo-400 shrink-0" /><span className="line-clamp-1">{item.branchName}</span></div>
+                          <div className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-slate-500 shrink-0" /><span className="truncate">{item.city}</span></div>
+                          <div className="flex items-center gap-1.5 justify-end"><Building2 className="h-3.5 w-3.5 text-slate-500 shrink-0" /><span className="truncate">{item.status}</span></div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-800/40">
+                          <span className="text-[10px] font-mono text-slate-500">Tier: {item.tierLabel || 'Good'}</span>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => toggleTrendGraph(`${activeTab}-${index}`)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1.5 rounded-lg text-xs flex items-center gap-1 font-bold cursor-pointer"><BarChart3 className="h-3.5 w-3.5 text-indigo-400" /> Trend</button>
+                            <button onClick={() => addToPreference(item)} className="bg-indigo-600 hover:bg-indigo-700 text-white p-1.5 rounded-lg transition-all shadow-md cursor-pointer"><Plus className="h-4 w-4" /></button>
+                          </div>
+                        </div>
+
+                        {expandedTrendId === `${activeTab}-${index}` && (
+                          <div className="mt-1 p-2 bg-slate-950 border border-slate-800 rounded-xl">
+                            <div className="h-32 w-full font-mono text-[10px]">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={graphData} margin={{ left: -5, right: 15, top: 10, bottom: 5 }}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                                  <XAxis dataKey="round" stroke="#64748b" />
+                                  <YAxis type="number" domain={['dataMin - 0.2', 'dataMax + 0.2']} stroke="#64748b" width={48} tickFormatter={(value) => { if (typeof value === 'number') { return value.toFixed(1); } return value; }} />
+                                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155' }} />
+                                  <Line type="monotone" dataKey="cutoff" stroke="#6366f1" strokeWidth={2} name="Cutoff" dot={{ r: 3 }} />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
-          ) : activeWindow === 'directory' ? (
-            <div className="max-w-4xl mx-auto space-y-6">
-              <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 sm:p-6 backdrop-blur-sm shadow-xl space-y-4">
+          )}
+
+          {/* 💎 WINDOW TWO: SIMULATOR VIEW (MOBILE ADJUSTED INTERACTIVE BARS) */}
+          {activeWindow === 'simulator' && (
+            <div className="max-w-4xl mx-auto space-y-6 animate-fadeIn">
+              <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-4 sm:p-6 backdrop-blur-sm shadow-xl flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-indigo-400"><ListOrdered className="h-5 w-5" /><h2 className="font-bold text-base sm:text-lg text-white">CAP Option Form Simulator</h2></div>
+                  <p className="text-xs text-slate-400 font-medium">Arrange preferences and execute mock allotment algorithm iterations.</p>
+                </div>
+                
+                {/* Responsive horizontal parameters tray for widgets row elements */}
+                <div className="flex flex-row items-center gap-3 bg-slate-950/60 p-2 sm:p-2.5 rounded-xl border border-slate-800/80 max-w-fit">
+                  <div className="w-20 sm:w-24">
+                    <label className="block text-[9px] uppercase font-bold tracking-wider text-slate-500 mb-1">Percentile</label>
+                    <input name="percentile" type="number" step="0.0000001" min="0" max="100" value={query.percentile} onChange={handleInputChange} placeholder="e.g. 98.5" className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-2 py-1 text-xs font-bold text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono" />
+                  </div>
+                  <div className="w-24 sm:w-28">
+                    <label className="block text-[9px] uppercase font-bold tracking-wider text-slate-500 mb-1">Category</label>
+                    <select name="category" value={query.category} onChange={handleInputChange} className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-2 py-1 text-xs font-bold text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer">{categories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}</select>
+                  </div>
+                </div>
+
+                {preferenceList.length > 0 && (
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <button onClick={triggerMockSimulation} className="flex-1 sm:flex-none py-2.5 px-4 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer">{simLoading ? "Simulating..." : "⚡ SIMULATE"}</button>
+                    <button onClick={exportPreferenceListToPDF} className="flex-1 sm:flex-none py-2.5 px-4 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"><Download className="h-4 w-4 text-emerald-400" /> Export PDF</button>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                {preferenceList.length === 0 ? (
+                  <div className="bg-slate-900/20 border border-slate-800 rounded-2xl p-8 sm:p-12 text-center text-slate-500 text-sm font-medium space-y-3">
+                    <p>Your Option Form is currently empty.</p>
+                    <button onClick={() => setActiveWindow('predictor')} className="text-xs px-4 py-2 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded-xl font-bold transition-all cursor-pointer">Go to Core Predictor & Add Colleges</button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {preferenceList.map((item, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-slate-900/30 border border-slate-800 rounded-xl gap-3 shadow-sm">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="h-8 w-8 sm:h-10 sm:w-10 shrink-0 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-center text-xs font-bold font-mono text-emerald-400 shadow-inner">#{index + 1}</div>
+                          <div className="space-y-0.5 min-w-0">
+                            <div className="flex items-center gap-1.5 text-[10px] font-mono"><span className="text-indigo-400 font-bold truncate">Code: {item.collegeCode}</span><span className="text-slate-500 hidden sm:inline">| {item.city}</span></div>
+                            <h4 className="text-xs sm:text-sm font-bold text-white truncate">{item.collegeName}</h4>
+                            <p className="text-[11px] text-slate-400 font-medium truncate flex items-center gap-1"><Award className="h-3 w-3 text-indigo-500 shrink-0" /> {item.branchName}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <div className="flex flex-col">
+                            <button disabled={index === 0} onClick={() => movePreferenceUp(index)} className="p-0.5 text-slate-500 hover:text-indigo-400 disabled:opacity-10 cursor-pointer"><ChevronUp className="h-4 w-4" /></button>
+                            <button disabled={index === preferenceList.length - 1} onClick={() => movePreferenceDown(index)} className="p-0.5 text-slate-500 hover:text-indigo-400 disabled:opacity-10 cursor-pointer"><ChevronDown className="h-4 w-4" /></button>
+                          </div>
+                          <button onClick={() => removeFromPreference(item.branchCode)} className="p-2 bg-slate-950 border border-slate-800/80 text-slate-400 hover:text-rose-400 rounded-xl cursor-pointer transition-all"><Trash2 className="h-3.5 w-3.5" /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {simResult && (
+                  <div className="p-4 sm:p-6 rounded-2xl bg-indigo-950/20 border border-indigo-500/30 animate-fadeIn flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xl">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 text-emerald-400 font-extrabold text-xs sm:text-sm uppercase tracking-wider"><CheckCircle2 className="h-4 w-4" /> Seat Allocated Successfully</div>
+                      <h3 className="font-black text-white text-sm sm:text-base pt-0.5">Choice #{simResult.preferenceNumber}: {simResult.collegeName}</h3>
+                      <p className="text-xs sm:text-sm text-indigo-300 font-bold">{simResult.branchName}</p>
+                    </div>
+                    <div className="bg-slate-950/80 border border-slate-800/60 p-3 rounded-xl font-mono text-[11px] text-slate-400 space-y-1 text-center sm:text-right shadow-inner w-full sm:w-auto shrink-0">
+                      <div>Round Match: <span className="text-white font-bold">{simResult.round}</span></div>
+                      <div>Cutoff: <span className="text-indigo-400 font-bold">{simResult.cutoffMatched.toFixed(4)}</span></div>
+                    </div>
+                  </div>
+                )}
+
+                {simResult === null && !simLoading && preferenceList.length > 0 && results.length > 0 && (
+                  <div className="p-4 rounded-xl bg-rose-500/5 border border-rose-500/20 text-rose-400 text-xs font-bold text-center flex items-center justify-center gap-2 shadow-sm animate-fadeIn">
+                    <AlertTriangle className="h-4 w-4 shrink-0" /> No Allotment Secured. Add more "Safe Bet" choices below your list!
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 💎 WINDOW THREE: DIRECTORY LIST VIEW */}
+          {activeWindow === 'directory' && (
+            <div className="max-w-4xl mx-auto space-y-6 animate-fadeIn">
+              <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-4 sm:p-5 backdrop-blur-sm shadow-xl space-y-4">
                 <div className="flex items-center gap-2 text-indigo-400"><BookOpen className="h-5 w-5" /><h2 className="font-bold text-base sm:text-lg text-white">Search Institutional Structure</h2></div>
                 <div className="relative">
                   <input type="text" value={directorySearch} onChange={handleDirectorySearchChange} placeholder="Search by College Name or DTE Code..." className="w-full rounded-xl bg-slate-950 border border-slate-700 pl-11 p-3.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium" />
@@ -578,24 +553,24 @@ function MainPredictorWorkspace() {
                 {Array.isArray(filteredColleges) && filteredColleges.map((college, idx) => {
                   const isExpanded = expandedCollegeId === college?.collegeCode;
                   return (
-                    <div key={idx} className="bg-slate-900/20 border border-slate-800 rounded-xl p-5 hover:border-slate-700/80 transition-all space-y-4 shadow-md">
-                      <div className="flex items-center justify-between gap-4">
+                    <div key={idx} className="bg-slate-900/20 border border-slate-800 rounded-xl p-4 sm:p-5 hover:border-slate-700/80 transition-all space-y-4 shadow-md">
+                      <div className="flex items-center justify-between gap-3">
                         <div className="space-y-1 min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-[10px] font-mono bg-slate-800 text-indigo-400 border border-slate-700 px-2 py-0.5 rounded">Code: {college?.collegeCode}</span>
-                            <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800/80 text-[9px] uppercase tracking-wide font-bold text-slate-400">{college?.status}</span>
-                            <span className="text-xs text-slate-500 flex items-center gap-1"><MapPin className="h-3 w-3" /> {college?.city}</span>
+                            <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800/80 text-[9px] uppercase tracking-wide font-bold text-slate-400 truncate">{college?.status}</span>
+                            <span className="text-xs text-slate-500 flex items-center gap-1 truncate"><MapPin className="h-3 w-3" /> {college?.city}</span>
                           </div>
-                          <h3 className="font-bold text-base text-white pt-1 truncate">{college?.collegeName}</h3>
+                          <h3 className="font-bold text-sm sm:text-base text-white pt-1 truncate">{college?.collegeName}</h3>
                         </div>
-                        <button type="button" onClick={() => toggleCollegeCollapse(college?.collegeCode)} className="p-2 rounded-lg bg-slate-900/60 border border-slate-800 text-indigo-400 hover:text-indigo-300 hover:bg-slate-800 transition-all cursor-pointer"><ChevronDown className={`h-5 w-5 transform transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} /></button>
+                        <button type="button" onClick={() => toggleCollegeCollapse(college?.collegeCode)} className="p-2 rounded-lg bg-slate-900/60 border border-slate-800 text-indigo-400 hover:text-indigo-300 hover:bg-slate-800 transition-all cursor-pointer"><ChevronDown className={`h-4 w-4 transform transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} /></button>
                       </div>
                       {isExpanded && (
                         <div className="space-y-2 border-t border-slate-800/60 pt-3 transition-all">
                           <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Available Specialization Streams:</div>
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-1.5">
                             {college?.branches && college.branches.length > 0 ? (
-                              college.branches.map((bName, bIdx) => <span key={bIdx} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-500/5 border border-indigo-500/20 px-3 py-1.5 text-xs font-medium text-indigo-300"><Award className="h-3.5 w-3.5 text-indigo-500 shrink-0" /> {bName}</span>)
+                              college.branches.map((bName, bIdx) => <span key={bIdx} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-500/5 border border-indigo-500/20 px-2.5 py-1 text-xs font-medium text-indigo-300"><Award className="h-3.5 w-3.5 text-indigo-500 shrink-0" /> {bName}</span>)
                             ) : ( <span className="text-xs text-slate-600 italic">No stream records populated.</span> )}
                           </div>
                         </div>
@@ -605,37 +580,29 @@ function MainPredictorWorkspace() {
                 })}
               </div>
             </div>
-          ) : (
-            <div className="max-w-4xl mx-auto space-y-6">
-              <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 backdrop-blur-sm">
-                <div className="space-y-1"><div className="flex items-center gap-2 text-indigo-400"><FileCheck className="h-5 w-5" /><h2 className="font-bold text-lg text-white">Select Admission Entry Quota</h2></div></div>
+          )}
+
+          {/* 💎 WINDOW FOUR: CAP DOCUMENT CHECKLIST CENTER */}
+          {activeWindow === 'documents' && (
+            <div className="max-w-4xl mx-auto space-y-6 animate-fadeIn">
+              <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 backdrop-blur-sm shadow-xl">
+                <div className="space-y-1"><div className="flex items-center gap-2 text-indigo-400"><FileCheck className="h-5 w-5" /><h2 className="font-bold text-base sm:text-lg text-white">Select Admission Entry Quota</h2></div></div>
                 <div>
-                  {/* 🎯 DYNAMIC RE-MAPPED DOCUMENTS DROPDOWN */}
-                  <select 
-                    value={docCategory} 
-                    onChange={(e) => setDocCategory(e.target.value)} 
-                    className="rounded-xl bg-slate-950 border border-slate-700 p-3 text-sm text-white font-bold focus:ring-2 focus:ring-indigo-500 cursor-pointer w-full sm:w-48"
-                  >
-                    {/* Fallback default open selection */}
+                  <select value={docCategory} onChange={(e) => setDocCategory(e.target.value)} className="rounded-xl bg-slate-950 border border-slate-700 p-3 text-sm text-white font-bold focus:ring-2 focus:ring-indigo-500 cursor-pointer w-full sm:w-48">
                     {categories.length === 0 && <option value="OPEN">General / OPEN</option>}
-                    {/* Database dynamically mapped categories populate here directly */}
-                    {categories.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
+                    {categories.map((cat) => ( <option key={cat} value={cat}>{cat}</option> ))}
                   </select>
                 </div>
               </div>
-              <div className="bg-slate-900/20 border border-slate-800 rounded-xl p-4 flex items-center justify-between text-xs font-medium">
-                <div className="flex items-center gap-2 text-slate-400"><Info className="h-4 w-4 text-indigo-400" /><span>Verification Progress:</span><span className="text-white font-bold font-mono">{checkedCount} of {currentDocsList.length} Arranged</span></div>
-                <div className="w-32 sm:w-48 h-2 bg-slate-900/20 border border-slate-800 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-300" style={{ width: `${((checkedCount || 0) / (currentDocsList.length || 1)) * 100}%` }}></div></div>
+              <div className="bg-slate-900/20 border border-slate-800 rounded-xl p-4 flex items-center justify-between text-xs font-medium shadow-md gap-3">
+                <div className="flex items-center gap-2 text-slate-400 min-w-0 flex-1"><Info className="h-4 w-4 text-indigo-400 shrink-0" /><span className="truncate">Progress:</span><span className="text-white font-bold font-mono shrink-0">{checkedCount}/{currentDocsList.length}</span></div>
+                <div className="w-24 sm:w-48 h-2 bg-slate-900/20 border border-slate-800 rounded-full overflow-hidden shrink-0"><div className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-300" style={{ width: `${((checkedCount || 0) / (currentDocsList.length || 1)) * 100}%` }}></div></div>
               </div>
               <div className="space-y-3">
                 {currentDocsList.map((doc) => {
                   if (!doc) return null; const isChecked = !!checkedDocs[doc.id];
                   return (
-                    <div key={doc.id} onClick={() => toggleDocumentCheck(doc.id)} className={`p-4 rounded-xl border transition-all cursor-pointer flex items-start gap-4 group select-none ${isChecked ? 'bg-emerald-500/5 border-emerald-500/30' : 'bg-slate-900/20 border-slate-800'}`}>
+                    <div key={doc.id} onClick={() => toggleDocumentCheck(doc.id)} className={`p-4 rounded-xl border transition-all cursor-pointer flex items-start gap-3 group select-none shadow-sm ${isChecked ? 'bg-emerald-500/5 border-emerald-500/30' : 'bg-slate-900/20 border-slate-800'}`}>
                       <div className="space-y-1"><h4 className={`text-sm font-bold transition-colors ${isChecked ? 'text-emerald-400 line-through opacity-70' : 'text-white'}`}>{doc.name}</h4><p className="text-xs text-slate-400 leading-relaxed font-medium">{doc.desc}</p></div>
                     </div>
                   );
