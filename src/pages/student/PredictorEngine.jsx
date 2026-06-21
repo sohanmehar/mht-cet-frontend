@@ -65,7 +65,6 @@ function MainPredictorWorkspace() {
   const [docCategory, setDocCategory] = useState('OPEN');
   const [checkedDocs, setCheckedDocs] = useState(() => JSON.parse(localStorage.getItem('cet_checked_docs') || '{}'));
   const [preferenceList, setPreferenceList] = useState(() => JSON.parse(localStorage.getItem('cet_pref_list') || '[]'));
-
   const [categories, setCategories] = useState([]); // Dynamic category array state
 
   useEffect(() => {
