@@ -6,7 +6,7 @@ import {
   Download, ListOrdered, ChevronUp, ChevronDown, 
   Menu, X, BarChart3, LayoutDashboard, FileCheck, Info, BookOpen
 } from 'lucide-react';
-
+import { googleLogout } from '@react-oauth/google';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -43,6 +43,11 @@ function MainPredictorWorkspace() {
   const [isCityOpen, setIsCityOpen] = useState(false);
   const [isBranchOpen, setIsBranchOpen] = useState(false);
   
+  // Dynamic User Session Data Load States
+  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('cet_user') || 'null'));
+  const [token, setToken] = useState(() => localStorage.getItem('cet_token') || 'null');
+  const [isOnboarding, setIsOnboarding] = useState(false);
+
   const cityRef = useRef(null);
   const branchRef = useRef(null);
 
@@ -64,8 +69,98 @@ function MainPredictorWorkspace() {
 
   const [docCategory, setDocCategory] = useState('OPEN');
   const [checkedDocs, setCheckedDocs] = useState(() => JSON.parse(localStorage.getItem('cet_checked_docs') || '{}'));
-  const [preferenceList, setPreferenceList] = useState(() => JSON.parse(localStorage.getItem('cet_pref_list') || '[]'));
+  
+  // 🔥 INITIALIZED TO EMPTY ARRAY (No fallback to leaking local storage cache!)
+  const [preferenceList, setPreferenceList] = useState([]);
   const [categories, setCategories] = useState([]);
+
+  // 🛡️ ROUTING SECURITY INTERCEPTOR MATRIX
+  useEffect(() => {
+    if (token === 'null' || !token || !user) {
+      window.location.href = '/login'; 
+    } else if (user.percentile === null || user.percentile === 0) {
+      setIsOnboarding(true);
+    }
+  }, [token, user]);
+
+  // Profile-lock variables auto synchronization
+  useEffect(() => {
+    if (user && user.percentile) {
+      setQuery(prev => ({
+        ...prev,
+        percentile: user.percentile.toString(),
+        category: user.category || 'GOPENS'
+      }));
+    }
+  }, [user]);
+
+  // 🔥 EFFECT TO LOAD USER PREFERENCES STRICTLY FROM MONGO CLOUD ON APP RENDER
+  useEffect(() => {
+    if (token === 'null' || !token || !user) return;
+
+    const fetchCloudPreferences = async () => {
+      try {
+        const response = await axios.get('http://localhost:5000/api/preferences', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (response.data?.success) {
+          setPreferenceList(response.data.data);
+        }
+      } catch (err) {
+        console.error("Failed to sync client memory with user choices stack:", err);
+      }
+    };
+    fetchCloudPreferences();
+  }, [token, user]);
+
+  // 🔥 HELPER DISPATCHER TO AUTO SYNC PREFERENCE LIST CHANGES TO THE BACKEND DATABASE LAYER
+  const syncPreferencesToCloud = async (updatedList) => {
+    setPreferenceList(updatedList);
+    try {
+      await axios.post('http://localhost:5000/api/preferences/sync', 
+        { choices: updatedList },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+    } catch (err) {
+      console.error("Cloud database sync operation failed:", err);
+    }
+  };
+
+  const handleOnboardingSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    try {
+      const response = await axios.put('http://localhost:5000/api/auth/update-profile', 
+        { percentile: query.percentile, category: query.category },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (response.data?.success) {
+        localStorage.setItem('cet_user', JSON.stringify(response.data.user));
+        
+        // 🎯 FIX: Force default window context mapping back to Core Predictor Engine layout!
+        localStorage.setItem('cet_active_window', 'predictor');
+        setActiveWindow('predictor');
+        
+        setUser(response.data.user);
+        setIsOnboarding(false);
+      }
+    } catch (err) {
+      setError('Failed to lock profile parameters to database.');
+    }
+  };
+
+  const handleLogout = () => {
+    googleLogout();
+    localStorage.removeItem('cet_token');
+    localStorage.removeItem('cet_user');
+    localStorage.removeItem('cet_active_window');
+    setToken('null');
+    setUser(null);
+    setResults([]);
+    setIsOnboarding(false);
+    window.location.href = '/login';
+  };
 
   const documentDatabase = {
     COMMON: [
@@ -106,6 +201,8 @@ function MainPredictorWorkspace() {
   useEffect(() => { localStorage.setItem('cet_active_window', activeWindow); }, [activeWindow]);
 
   useEffect(() => {
+      if (token === 'null' || !token || !user) return;
+      
       const syncDatabaseDropdowns = async () => {
         setDirLoading(true);
         setError('');
@@ -135,7 +232,7 @@ function MainPredictorWorkspace() {
         } finally { setDirLoading(false); }
       };
       syncDatabaseDropdowns();
-  }, [activeWindow]);
+  }, [activeWindow, token, user]);
 
   const handleDirectorySearchChange = (e) => {
     const value = e.target.value;
@@ -160,7 +257,6 @@ function MainPredictorWorkspace() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  useEffect(() => { localStorage.setItem('cet_pref_list', JSON.stringify(preferenceList || [])); }, [preferenceList]);
   useEffect(() => { localStorage.setItem('cet_checked_docs', JSON.stringify(checkedDocs || {})); }, [checkedDocs]);
 
   const handleCityToggle = (cityCode) => {
@@ -185,15 +281,45 @@ function MainPredictorWorkspace() {
     e.preventDefault(); setLoading(true); setError('');
     try {
       const payload = { ...query, city: selectedCities, branch: selectedBranches };
-      const response = await axios.post('http://localhost:5000/api/predict', payload);
+      const response = await axios.post('http://localhost:5000/api/predict', payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (response.data?.success && Array.isArray(response.data.data)) setResults(response.data.data);
     } catch (err) { setError('Predictor connection connection offline.'); } finally { setLoading(false); }
   };
 
-  const addToPreference = (item) => { const isAlreadyAdded = (preferenceList || []).some(p => p?.branchCode === item?.branchCode); if (!isAlreadyAdded) setPreferenceList([...preferenceList, item]); };
-  const removeFromPreference = (branchCode) => { setPreferenceList((preferenceList || []).filter(p => p?.branchCode !== branchCode)); };
-  const movePreferenceUp = (index) => { if (index === 0) return; const updatedList = [...preferenceList]; const temp = updatedList[index]; updatedList[index] = updatedList[index - 1]; updatedList[index - 1] = temp; setPreferenceList(updatedList); };
-  const movePreferenceDown = (index) => { if (index === (preferenceList || []).length - 1) return; const updatedList = [...preferenceList]; const temp = updatedList[index]; updatedList[index] = updatedList[index + 1]; updatedList[index + 1] = temp; setPreferenceList(updatedList); };
+  // 🔥 CONVERTED ALL MUTATIONS TO LIVE CLOUD DB STORAGE HANDLERS
+  const addToPreference = (item) => { 
+    const isAlreadyAdded = preferenceList.some(p => p?.branchCode === item?.branchCode); 
+    if (!isAlreadyAdded) {
+      const updated = [...preferenceList, item];
+      syncPreferencesToCloud(updated);
+    }
+  };
+
+  const removeFromPreference = (branchCode) => { 
+    const updated = preferenceList.filter(p => p?.branchCode !== branchCode); 
+    syncPreferencesToCloud(updated);
+  };
+
+  const movePreferenceUp = (index) => { 
+    if (index === 0) return; 
+    const updated = [...preferenceList]; 
+    const temp = updated[index]; 
+    updated[index] = updated[index - 1]; 
+    updated[index - 1] = temp; 
+    syncPreferencesToCloud(updated);
+  };
+
+  const movePreferenceDown = (index) => { 
+    if (index === preferenceList.length - 1) return; 
+    const updated = [...preferenceList]; 
+    const temp = updated[index]; 
+    updated[index] = updated[index + 1]; 
+    updated[index + 1] = temp; 
+    syncPreferencesToCloud(updated);
+  };
+
   const toggleTrendGraph = (id) => { setExpandedTrendId(expandedTrendId === id ? null : id); };
   const toggleDocumentCheck = (docId) => { setCheckedDocs(prev => ({ ...prev, [docId]: !prev[docId] })); };
 
@@ -208,7 +334,7 @@ function MainPredictorWorkspace() {
         percentile: query.percentile,
         category: query.category,
         preferences: preferenceList
-      });
+      }, { headers: { Authorization: `Bearer ${token}` } });
       if (response.data?.success) { setSimResult(response.data.data); }
     } catch (err) {
       console.error("Simulation frontend handler failed:", err);
@@ -243,44 +369,92 @@ function MainPredictorWorkspace() {
   const currentDocsList = getRequiredDocuments() || [];
   const checkedCount = currentDocsList.filter(d => d && checkedDocs[d?.id]).length;
 
+  if (token === 'null' || !token || !user) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center font-mono text-xs text-slate-500">
+        Redirecting security layers to verification gateway...
+      </div>
+    );
+  }
+
+  if (isOnboarding) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 font-sans">
+        <form onSubmit={handleOnboardingSubmit} className="max-w-md w-full bg-slate-900 border border-slate-800/80 rounded-2xl p-6 sm:p-8 space-y-5 shadow-2xl animate-fadeIn">
+          <div className="space-y-1 border-b border-slate-800 pb-3">
+            <h3 className="text-lg font-black text-white flex items-center gap-2"><Sliders className="h-5 w-5 text-indigo-400" /> Lock Profile Attributes</h3>
+            <p className="text-xs text-slate-400 font-medium">Set up your permanent credentials parameters to unlock dashboard synchronization.</p>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">MHT-CET Percentile</label>
+              <input name="percentile" type="number" step="0.0000001" required min="0" max="100" value={query.percentile} onChange={handleInputChange} placeholder="e.g. 99.17253" className="w-full rounded-xl bg-slate-950 border border-slate-700 p-3 text-sm text-white font-mono font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Counselling Seat Category</label>
+              <select name="category" value={query.category} onChange={handleInputChange} className="w-full rounded-xl bg-slate-950 border border-slate-700 p-3 text-sm text-white font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer">
+                {categories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <button type="submit" className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl transition-all shadow-lg shadow-indigo-600/10 cursor-pointer">Initialize Full Dashboard Engine</button>
+        </form>
+      </div>
+    );
+  }
+  
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex font-sans overflow-hidden">
       
-      {/* 📱 MOBILE NAVIGATION SLIDEOVER PANEL OVERLAY */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm lg:hidden" onClick={() => setIsMobileMenuOpen(false)} />
       )}
 
-      {/* SIDEBAR CONTAINER - MOBILE AND DESKTOP COMPATIBLE */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 transition-transform duration-300 transform lg:translate-x-0 lg:static lg:h-screen ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="h-full flex flex-col justify-between p-4">
-          <div className="space-y-6">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-              <div className="flex items-center gap-2.5 text-indigo-400"><GraduationCap className="h-7 w-7" /><span className="font-extrabold text-lg bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent tracking-tight">MHT-CET Suite</span></div>
-              <button onClick={() => setIsMobileMenuOpen(false)} className="lg:hidden text-slate-400 p-1 rounded-md hover:bg-slate-800 cursor-pointer"><X className="h-5 w-5" /></button>
-            </div>
-            <nav className="space-y-1.5">
-              <button onClick={() => { setActiveWindow('predictor'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${activeWindow === 'predictor' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}><LayoutDashboard className="h-4 w-4" /> Core Predictor Engine</button>
-              
-              <button onClick={() => { setActiveWindow('simulator'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${activeWindow === 'simulator' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}>
-                <div className="flex items-center gap-3">
-                  <ListOrdered className="h-4 w-4" /> 
-                  <span>CAP Choice Simulator</span>
-                </div>
-                {preferenceList.length > 0 && (
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeWindow === 'simulator' ? 'bg-white text-indigo-600' : 'bg-indigo-500/20 text-indigo-400'}`}>{preferenceList.length}</span>
-                )}
-              </button>
+          <div className="space-y-6 flex-1 flex flex-col justify-between">
+            <div className="space-y-6">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+                <div className="flex items-center gap-2.5 text-indigo-400"><GraduationCap className="h-7 w-7" /><span className="font-extrabold text-lg bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent tracking-tight">MHT-CET Suite</span></div>
+                <button onClick={() => setIsMobileMenuOpen(false)} className="lg:hidden text-slate-400 p-1 rounded-md hover:bg-slate-800 cursor-pointer"><X className="h-5 w-5" /></button>
+              </div>
+              <nav className="space-y-1.5">
+                <button onClick={() => { setActiveWindow('predictor'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${activeWindow === 'predictor' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}><LayoutDashboard className="h-4 w-4" /> Core Predictor Engine</button>
+                
+                <button onClick={() => { setActiveWindow('simulator'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${activeWindow === 'simulator' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}>
+                  <div className="flex items-center gap-3">
+                    <ListOrdered className="h-4 w-4" /> 
+                    <span>CAP Choice Simulator</span>
+                  </div>
+                  {preferenceList.length > 0 && (
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeWindow === 'simulator' ? 'bg-white text-indigo-600' : 'bg-indigo-500/20 text-indigo-400'}`}>{preferenceList.length}</span>
+                  )}
+                </button>
 
-              <button onClick={() => { setActiveWindow('directory'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${activeWindow === 'directory' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}><BookOpen className="h-4 w-4" /> College & Branch List</button>
-              <button onClick={() => { setActiveWindow('documents'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${activeWindow === 'documents' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}><FileCheck className="h-4 w-4" /> CAP Document Tracker</button>
-            </nav>
+                <button onClick={() => { setActiveWindow('directory'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${activeWindow === 'directory' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}><BookOpen className="h-4 w-4" /> College & Branch List</button>
+                <button onClick={() => { setActiveWindow('documents'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${activeWindow === 'documents' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}><FileCheck className="h-4 w-4" /> CAP Document Tracker</button>
+              </nav>
+            </div>
+            
+            {user && (
+              <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between gap-2 mt-auto">
+                <div className="flex items-center gap-2 min-w-0">
+                  {user.avatar && <img src={user.avatar} alt="Avatar" className="h-7 w-7 rounded-full border border-indigo-500/30 shrink-0" />}
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-white truncate leading-none">{user.name}</p>
+                    <span className="text-[9px] text-indigo-400 font-mono font-bold uppercase tracking-wider">{user.category}</span>
+                  </div>
+                </div>
+                <button onClick={handleLogout} className="text-[10px] font-bold px-2 py-1 bg-slate-950 hover:bg-rose-950/40 text-rose-400 border border-slate-800 rounded-lg cursor-pointer transition-all shrink-0">Logout</button>
+              </div>
+            )}
           </div>
-          <div className="text-[10px] font-mono text-slate-600 text-center pt-3 border-t border-slate-800/60">v4.4 Premium Stable</div>
+          <div className="text-[10px] font-mono text-slate-600 text-center pt-3 border-t border-slate-800/60 mt-2">v4.4 Premium Stable</div>
         </div>
       </aside>
 
-      {/* MAIN LAYOUT WRAPPER LAYER */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
         <header className="border-b border-slate-800 bg-slate-950/60 backdrop-blur-md px-4 sm:px-6 py-4 sticky top-0 z-30 flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
@@ -295,13 +469,11 @@ function MainPredictorWorkspace() {
         <main className="p-4 sm:p-6 lg:p-8 flex-1">
           {error && <div className="mb-4 p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 font-mono text-xs text-center">{error}</div>}
 
-          {/* 💎 WINDOW ONE: CORE PREDICTOR INTERFACE */}
+          {/* 💎 WINDOW ONE: CORE PREDICTOR ENGINE */}
           {activeWindow === 'predictor' && (
             <div className="space-y-6 sm:space-y-8 animate-fadeIn">
               <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-4 sm:p-6 backdrop-blur-sm shadow-xl">
                 <div className="flex items-center gap-2 text-indigo-400 mb-4"><Sliders className="h-5 w-5" /><h2 className="font-bold text-base sm:text-lg text-white">Configure Search Parameters</h2></div>
-                
-                {/* 📱 RESPONSIVE CONFIG PARAMETERS BOX STRIPS FOR PHONE FIELDS */}
                 <form onSubmit={executePrediction} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">My Percentile</label>
@@ -360,7 +532,6 @@ function MainPredictorWorkspace() {
               </div>
 
               <div className="space-y-4">
-                {/* 📱 HORIZONTAL SCROLL CHIPS FOR ACTIVE TABS ON MOBILE VIEW */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-800 pb-3">
                   <h3 className="font-extrabold text-base sm:text-lg text-white tracking-tight">Predicted Adjustments</h3>
                   <div className="flex rounded-lg bg-slate-900 border border-slate-800 p-1 text-[11px] overflow-x-auto whitespace-nowrap max-w-full scrollbar-none">
@@ -370,7 +541,6 @@ function MainPredictorWorkspace() {
                   </div>
                 </div>
 
-                {/* 📱 PERFECT GRID RESPONSIVENESS MATRIX PAR COLLAPSE CHANNELS */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {displayList.map((item, index) => {
                     const uniqueRoundsMap = {};
@@ -397,7 +567,6 @@ function MainPredictorWorkspace() {
                           <h4 className="font-bold text-sm sm:text-base text-white line-clamp-2 leading-snug">{item.collegeName}</h4>
                         </div>
 
-                        {/* 📈 4 COLUMNS CELL SYSTEM FLEXES PROPERLY */}
                         <div className="bg-slate-950/60 rounded-lg p-2 border border-slate-800 grid grid-cols-4 gap-0.5 text-center font-mono text-[10px] sm:text-[11px]">
                           <div className="border-r border-slate-800/80">
                             <div className="text-[9px] text-slate-500 font-bold">R1</div>
@@ -454,7 +623,7 @@ function MainPredictorWorkspace() {
             </div>
           )}
 
-          {/* 💎 WINDOW TWO: SIMULATOR VIEW (MOBILE ADJUSTED INTERACTIVE BARS) */}
+          {/* 💎 WINDOW TWO: SIMULATOR WORKSPACE */}
           {activeWindow === 'simulator' && (
             <div className="max-w-4xl mx-auto space-y-6 animate-fadeIn">
               <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-4 sm:p-6 backdrop-blur-sm shadow-xl flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
@@ -463,7 +632,6 @@ function MainPredictorWorkspace() {
                   <p className="text-xs text-slate-400 font-medium">Arrange preferences and execute mock allotment algorithm iterations.</p>
                 </div>
                 
-                {/* Responsive horizontal parameters tray for widgets row elements */}
                 <div className="flex flex-row items-center gap-3 bg-slate-950/60 p-2 sm:p-2.5 rounded-xl border border-slate-800/80 max-w-fit">
                   <div className="w-20 sm:w-24">
                     <label className="block text-[9px] uppercase font-bold tracking-wider text-slate-500 mb-1">Percentile</label>
@@ -563,7 +731,9 @@ function MainPredictorWorkspace() {
                           </div>
                           <h3 className="font-bold text-sm sm:text-base text-white pt-1 truncate">{college?.collegeName}</h3>
                         </div>
-                        <button type="button" onClick={() => toggleCollegeCollapse(college?.collegeCode)} className="p-2 rounded-lg bg-slate-900/60 border border-slate-800 text-indigo-400 hover:text-indigo-300 hover:bg-slate-800 transition-all cursor-pointer"><ChevronDown className={`h-4 w-4 transform transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} /></button>
+                        <button type="button" onClick={() => toggleCollegeCollapse(college?.collegeCode)} className="p-2 rounded-lg bg-slate-900/60 border border-slate-800 text-indigo-400 hover:text-indigo-300 hover:bg-slate-800 transition-all cursor-pointer">
+                          <ChevronDown className={`h-4 w-4 transform transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                        </button>
                       </div>
                       {isExpanded && (
                         <div className="space-y-2 border-t border-slate-800/60 pt-3 transition-all">
@@ -582,7 +752,7 @@ function MainPredictorWorkspace() {
             </div>
           )}
 
-          {/* 💎 WINDOW FOUR: CAP DOCUMENT CHECKLIST CENTER */}
+          {/* 💎 WINDOW FOUR: CAP DOCUMENT TRACKER */}
           {activeWindow === 'documents' && (
             <div className="max-w-4xl mx-auto space-y-6 animate-fadeIn">
               <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 backdrop-blur-sm shadow-xl">
@@ -596,7 +766,7 @@ function MainPredictorWorkspace() {
               </div>
               <div className="bg-slate-900/20 border border-slate-800 rounded-xl p-4 flex items-center justify-between text-xs font-medium shadow-md gap-3">
                 <div className="flex items-center gap-2 text-slate-400 min-w-0 flex-1"><Info className="h-4 w-4 text-indigo-400 shrink-0" /><span className="truncate">Progress:</span><span className="text-white font-bold font-mono shrink-0">{checkedCount}/{currentDocsList.length}</span></div>
-                <div className="w-24 sm:w-48 h-2 bg-slate-900/20 border border-slate-800 rounded-full overflow-hidden shrink-0"><div className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-300" style={{ width: `${((checkedCount || 0) / (currentDocsList.length || 1)) * 100}%` }}></div></div>
+                <div className="w-24 sm:w-48 h-2 bg-gradient-to-r from-slate-900/20 via-slate-800/10 to-slate-900/20 border border-slate-800 rounded-full overflow-hidden shrink-0"><div className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-300" style={{ width: `${((checkedCount || 0) / (currentDocsList.length || 1)) * 100}%` }}></div></div>
               </div>
               <div className="space-y-3">
                 {currentDocsList.map((doc) => {

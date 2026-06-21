@@ -1,35 +1,59 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GraduationCap, ShieldAlert, KeyRound, Smartphone } from 'lucide-react';
+import { GoogleLogin } from '@react-oauth/google';
+import axios from 'axios';
 
 export default function Login() {
   const navigate = useNavigate();
-  // Role toggles state monitor
   const [isAdmin, setIsAdmin] = useState(false);
-  
-  // Form input field state trackers
   const [formData, setFormData] = useState({ identifier: '', securityPin: '' });
+  const [authError, setAuthError] = useState('');
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // 🎯 GOOGLE AUTHENTICATION HANDLER FOR STUDENTS
+  const handleGoogleLoginSuccess = async (credentialResponse) => {
+    setAuthError('');
+    try {
+      const response = await axios.post('http://localhost:5000/api/auth/google', {
+        idToken: credentialResponse.credential
+      });
+
+      if (response.data?.success) {
+        const authData = response.data;
+        // Lock secure dynamic sessions to localStorage
+        localStorage.setItem('cet_token', authData.token);
+        localStorage.setItem('cet_user', JSON.stringify(authData.user));
+        
+        console.log("Student parameters registered successfully via Google OAuth.");
+        navigate('/student/predict');
+      }
+    } catch (err) {
+      console.error("Auth trigger failure:", err);
+      setAuthError('Google Sign-In integration dropped. Handshake rejected.');
+    }
+  };
+
   const handleFormSubmit = (e) => {
     e.preventDefault();
+    setAuthError('');
     
-    // Static simulation system redirection path router logic
     if (isAdmin) {
       console.log("Admin parameters authenticating...", formData);
       navigate('/admin/dashboard');
     } else {
+      // Fallback local mock credential handling
       console.log("Student parameters registering session...", formData);
       navigate('/student/predict');
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 px-4 py-12 sm:px-6 lg:px-8">
-      <div className="w-full max-w-md space-y-8 bg-white/5 backdrop-blur-md p-8 rounded-2xl border border-white/10 shadow-2xl">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 px-4 py-12 sm:px-6 lg:px-8 font-sans">
+      <div className="w-full max-w-md space-y-8 bg-white/5 backdrop-blur-md p-8 rounded-2xl border border-white/10 shadow-2xl relative overflow-hidden">
         
         {/* Branding Headers */}
         <div className="text-center">
@@ -44,28 +68,56 @@ export default function Login() {
           </p>
         </div>
 
+        {authError && (
+          <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl text-xs font-mono text-center">
+            {authError}
+          </div>
+        )}
+
         {/* Dynamic Dual Role Toggler Layout Tabs */}
         <div className="flex rounded-lg bg-slate-950/60 p-1 border border-white/5">
           <button
             onClick={() => setIsAdmin(false)}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-md transition-all duration-200 ${!isAdmin ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-md transition-all duration-200 cursor-pointer ${!isAdmin ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
           >
             <Smartphone className="h-4 w-4" /> Student Portal
           </button>
           <button
             onClick={() => setIsAdmin(true)}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-md transition-all duration-200 ${isAdmin ? 'bg-red-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-md transition-all duration-200 cursor-pointer ${isAdmin ? 'bg-red-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
           >
             <ShieldAlert className="h-4 w-4" /> Admin Access
           </button>
         </div>
+
+        {/* ⚡ CONDITIONAL OAUTH LAYER FOR STUDENT SEAMLESS PORTAL */}
+        {!isAdmin && (
+          <div className="space-y-4 animate-fadeIn">
+            <div className="flex justify-center pt-2">
+              <GoogleLogin 
+                onSuccess={handleGoogleLoginSuccess} 
+                onError={() => setAuthError('Google identification token dropped.')}
+                theme="filled_dark"
+                shape="pill"
+                text="signin_with"
+                width="100%"
+              />
+            </div>
+            
+            <div className="relative flex py-2 items-center text-xs text-slate-500 uppercase font-bold">
+              <div className="flex-grow border-t border-slate-800"></div>
+              <span className="flex-shrink mx-4 text-slate-500">Or Legacy Login</span>
+              <div className="flex-grow border-t border-slate-800"></div>
+            </div>
+          </div>
+        )}
 
         {/* Input Interactive Fields Form UI */}
         <form className="mt-6 space-y-6" onSubmit={handleFormSubmit}>
           <div className="space-y-4 rounded-md shadow-sm">
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-                {isAdmin ? "Admin Username / Email" : "Mobile Number / Google Account"}
+                {isAdmin ? "Admin Username / Email" : "Mobile Number Entry"}
               </label>
               <input
                 name="identifier"
@@ -99,16 +151,16 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Action Call Submit Button */}
           <div>
             <button
               type="submit"
-              className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-lg text-sm font-bold text-white transition-all shadow-md active:scale-98 ${isAdmin ? 'bg-red-600 hover:bg-red-700 shadow-red-900/30' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-900/30'}`}
+              className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-lg text-sm font-bold text-white transition-all shadow-md active:scale-98 cursor-pointer ${isAdmin ? 'bg-red-600 hover:bg-red-700 shadow-red-900/30' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-900/30'}`}
             >
               Secure Login →
             </button>
           </div>
         </form>
+
       </div>
     </div>
   );
