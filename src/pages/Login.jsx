@@ -23,7 +23,7 @@ export default function Login() {
     setAuthError('');
     setLoading(true);
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/google', {
+      const response = await axios.post('https://mht-cet-backend-uxqs.onrender.com/api/auth/google', {
         idToken: credentialResponse.credential
       });
       if (response.data?.success) {
@@ -51,7 +51,7 @@ export default function Login() {
       }
 
       if (authMode === 'LOGIN') {
-        const response = await axios.post('http://localhost:5000/api/auth/login', {
+        const response = await axios.post('https://mht-cet-backend-uxqs.onrender.com/api/auth/login', {
           email: formData.email,
           password: formData.password
         });
@@ -61,7 +61,7 @@ export default function Login() {
           navigate('/student/predict');
         }
       } else if (authMode === 'SIGNUP') {
-        const response = await axios.post('http://localhost:5000/api/auth/register', {
+        const response = await axios.post('https://mht-cet-backend-uxqs.onrender.com/api/auth/register', {
           name: formData.name,
           email: formData.email,
           password: formData.password
@@ -71,7 +71,7 @@ export default function Login() {
           setAuthMode('OTP_VERIFY');
         }
       } else if (authMode === 'OTP_VERIFY') {
-        const response = await axios.post('http://localhost:5000/api/auth/verify-otp', {
+        const response = await axios.post('https://mht-cet-backend-uxqs.onrender.com/api/auth/verify-otp', {
           email: formData.email,
           otp: formData.otpCode
         });
@@ -235,6 +235,7 @@ export default function Login() {
                 <GoogleLogin 
                   onSuccess={handleGoogleLoginSuccess} 
                   onError={() => setAuthError('Google identity network dropped.')}
+                  ux_mode="popup"
                   theme="filled_dark" shape="pill" text="signin_with" width="100%"
                 />
               </div>

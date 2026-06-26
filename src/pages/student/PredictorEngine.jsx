@@ -100,7 +100,7 @@ function MainPredictorWorkspace() {
 
     const fetchCloudPreferences = async () => {
       try {
-        const response = await axios.get('http://localhost:5000/api/preferences', {
+        const response = await axios.get('https://mht-cet-backend-uxqs.onrender.com/api/preferences', {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (response.data?.success) {
@@ -116,7 +116,7 @@ function MainPredictorWorkspace() {
   const syncPreferencesToCloud = async (updatedList) => {
     setPreferenceList(updatedList);
     try {
-      await axios.post('http://localhost:5000/api/preferences/sync', 
+      await axios.post('https://mht-cet-backend-uxqs.onrender.com/api/preferences/sync', 
         { choices: updatedList },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -207,10 +207,10 @@ function MainPredictorWorkspace() {
         setError('');
         try {
           const [distRes, branchRes, dirRes, catRes] = await Promise.all([
-            axios.get('http://localhost:5000/api/districts'),
-            axios.get('http://localhost:5000/api/branches'),
-            axios.get('http://localhost:5000/api/colleges-directory'),
-            axios.get('http://localhost:5000/api/categories')
+            axios.get('https://mht-cet-backend-uxqs.onrender.com/api/districts'),
+            axios.get('https://mht-cet-backend-uxqs.onrender.com/api/branches'),
+            axios.get('https://mht-cet-backend-uxqs.onrender.com/api/colleges-directory'),
+            axios.get('https://mht-cet-backend-uxqs.onrender.com/api/categories')
           ]);
 
           if (distRes.data?.success) setDistricts(distRes.data.data);
@@ -280,7 +280,7 @@ function MainPredictorWorkspace() {
     e.preventDefault(); setLoading(true); setError('');
     try {
       const payload = { ...query, city: selectedCities, branch: selectedBranches };
-      const response = await axios.post('http://localhost:5000/api/predict', payload, {
+      const response = await axios.post('https://mht-cet-backend-uxqs.onrender.com/api/predict', payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (response.data?.success && Array.isArray(response.data.data)) setResults(response.data.data);
@@ -328,7 +328,7 @@ function MainPredictorWorkspace() {
     }
     setSimLoading(true);
     try {
-      const response = await axios.post('http://localhost:5000/api/predict/simulate-mock', {
+      const response = await axios.post('https://mht-cet-backend-uxqs.onrender.com/api/predict/simulate-mock', {
         percentile: query.percentile,
         category: query.category,
         preferences: preferenceList
@@ -404,7 +404,7 @@ function MainPredictorWorkspace() {
       }
 
       try {
-        const response = await axios.put('http://localhost:5000/api/auth/onboard-profile', {
+        const response = await axios.put('https://mht-cet-backend-uxqs.onrender.com/api/auth/onboard-profile', {
           email: user.email,
           mobileNumber: localOnboardData.mobileNumber,
           district: localOnboardData.district,
