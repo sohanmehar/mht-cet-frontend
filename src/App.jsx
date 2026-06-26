@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 // Placeholder standard screens for system compilation verification
 import Login from './pages/Login';
@@ -66,6 +67,7 @@ function App() {
           {/* Fallback Error Redirection Handling */}
           <Route path="*" element={<div className="p-20 text-center font-bold text-xl">404: Page Not Found</div>} />
         </Routes>
+        <SpeedInsights />
       </div>
     </Router>
   );
