@@ -45,8 +45,20 @@ export default function Login() {
     setLoading(true);
 
     try {
+      // 🎯 ADMIN LOGIN SEPARATION HANDLER
       if (isAdmin) {
-        navigate('/admin/dashboard');
+        // Agar admin ka endpoint alag hai toh use badal lena, varna ye standard path handle karega:
+        const response = await axios.post('https://mht-cet-backend-uxqs.onrender.com/api/auth/login', {
+          email: formData.email,
+          password: formData.password,
+          role: 'ADMIN' // Agar backend role verify karta hai parameters se
+        });
+
+        if (response.data?.success) {
+          localStorage.setItem('cet_token', response.data.token);
+          localStorage.setItem('cet_user', JSON.stringify(response.data.user));
+          navigate('/admin/dashboard'); // Token secure hone ke baad redirection safe chalega
+        }
         return;
       }
 
