@@ -46,9 +46,6 @@ export default function Login() {
 
     try {
       if (isAdmin) {
-        // Mock Bypass only for local layout check:
-        localStorage.setItem('cet_token', 'mock_admin_token_layer');
-        localStorage.setItem('cet_user', JSON.stringify({ name: 'Admin Control', role: 'ADMIN' }));
         navigate('/admin/dashboard');
         return;
       }
