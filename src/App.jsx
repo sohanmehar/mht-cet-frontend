@@ -1,49 +1,75 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
-// Placeholder standard screens for system compilation verification
+// Screens
 import Login from './pages/Login';
 import StudentDashboard from './pages/student/StudentDashboard';
 import PredictorEngine from './pages/student/PredictorEngine';
 import AdminDashboard from './pages/admin/AdminDashboard';
 
-// 🛡️ 1. STUDENT ROUTE GUARD: Blocks access if token is completely missing
+// 🛡️ STUDENT ROUTE GUARD
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('cet_token');
   const userString = localStorage.getItem('cet_user');
-
-  // Strict check: Agar user logged in nahi hai, toh hi login par bhejo
   if (!token || token === 'null' || !userString || userString === 'null') {
     return <Navigate to="/login" replace />;
   }
-
   return children;
 };
 
-// 👑 2. ADMIN ROUTE GUARD: Safe parsing with absolute validation
+// 👑 ADMIN ROUTE GUARD
 const AdminProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('cet_token');
   const userString = localStorage.getItem('cet_user');
-
   if (!token || token === 'null' || !userString || userString === 'null') {
     return <Navigate to="/login" replace />;
   }
-
   return children;
+};
+
+// 🌍 🎯 GLOBAL APPS WRAPPER LAYOUT (The Permanent Solution)
+const AppLayout = ({ children }) => {
+  const location = useLocation();
+  
+  // Login page par humein full layout (sidebar/footer) nahi chahiye, wo standalone achha lagta hai
+  const isAuthPage = location.pathname === '/login';
+
+  if (isAuthPage) {
+    return <>{children}</>;
+  }
+
+  return (
+    <div className="min-h-screen bg-[#FAFAFA] text-[#222222] font-sans antialiased flex flex-col justify-between">
+      {/* Main Page Render Content */}
+      <div className="flex-1">
+        {children}
+      </div>
+
+      {/* 📜 Fixed Institutional Global Copyright Footer */}
+      <footer className="w-full border-t border-slate-200/80 bg-white py-4 px-6 flex flex-col sm:flex-row items-center justify-between text-[11px] font-sans font-semibold text-slate-500 shrink-0">
+        <div>
+          © 2026 MHT-CET Suite. All rights reserved.
+        </div>
+        <div className="flex items-center gap-4 mt-1 sm:mt-0 font-mono text-[10px] text-slate-400">
+          <span>v4.4 Premium Stable</span>
+          <span>&bull;</span>
+          <span>Secure Cloud Connected Node</span>
+        </div>
+      </footer>
+    </div>
+  );
 };
 
 function App() {
   return (
     <Router>
-      <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
+      <AppLayout>
         <Routes>
           {/* Base Flow Route */}
           <Route path="/" element={<Navigate to="/login" replace />} />
-          
-          {/* 🔓 Public Route: Ispe koi guard nahi lagega, ye hamesha khulega */}
           <Route path="/login" element={<Login />} />
 
-          {/* 👤 Student Portal Module Scope - INSULATED */}
+          {/* 👤 Student Portal Module Scope */}
           <Route path="/student/dashboard" element={
             <ProtectedRoute>
               <StudentDashboard />
@@ -56,7 +82,7 @@ function App() {
             </ProtectedRoute>
           } />
 
-          {/* 👑 Admin Management Workspace Module Scope - INSULATED */}
+          {/* 👑 Admin Management Workspace Module Scope */}
           <Route path="/admin/dashboard" element={
             <AdminProtectedRoute>
               <AdminDashboard />
@@ -66,7 +92,7 @@ function App() {
           {/* Fallback Error Redirection Handling */}
           <Route path="*" element={<div className="p-20 text-center font-bold text-xl">404: Page Not Found</div>} />
         </Routes>
-      </div>
+      </AppLayout>
     </Router>
   );
 }
